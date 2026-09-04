@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradePilot - AI Trading Assistant</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="header">
+        <div class="logo">TRADEPILOT</div>
+        <div class="subtitle">AI proposes. Risk controls. Human approves. Alpaca executes. The system learns.</div>
+        <div class="status-indicators">
+            <span class="badge warning" id="paper-badge">PAPER TRADING</span>
+            <span class="badge danger" id="live-badge">LIVE TRADING DISABLED</span>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <div class="grid">
+            <!-- 1. MARKET SNAPSHOT -->
+            <section class="card">
+                <h2>1. MARKET SNAPSHOT</h2>
+                <div class="metrics-grid" id="market-snapshot">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+
+            <!-- 2. AI STRATEGY -->
+            <section class="card">
+                <h2>2. AI STRATEGY</h2>
+                <div class="ai-strategy" id="ai-strategy">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+
+            <!-- 3. RISK ENGINE -->
+            <section class="card">
+                <h2>3. RISK ENGINE</h2>
+                <div class="risk-engine" id="risk-engine">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+
+            <!-- 4. DEMO EXECUTION & 5. EXECUTION -->
+            <section class="card">
+                <h2>4. EXECUTION</h2>
+                <div class="execution" id="execution-section">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+        </div>
+
+        <!-- 6. DECISION TRACE -->
+        <section class="card full-width">
+            <h2>DECISION TRACE TIMELINE</h2>
+            <div class="timeline" id="decision-trace">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+
+        <!-- 7. LEARNING LOOP -->
+        <section class="card full-width">
+            <h2>LEARNING LOOP</h2>
+            <div class="learning-loop" id="learning-loop">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
