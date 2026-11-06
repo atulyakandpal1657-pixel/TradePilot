@@ -29,6 +29,23 @@ class RiskStatus(str, Enum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
 
+class TradeLifecycleStatus(str, Enum):
+    """Pre-execution lifecycle states for pending proposals (Step 4).
+
+    RISK_APPROVED     — RiskEngine passed; awaiting human decision.
+    HUMAN_APPROVED    — Human explicitly approved; awaiting Step 5 execution.
+    EXECUTION_PENDING — Submitted to executor; awaiting Alpaca confirmation.
+    EXECUTED          — Filled by Alpaca (lifecycle complete).
+
+    These states live in the pending_proposals table and must NOT be confused
+    with ExecutionStatus, which describes the Alpaca order lifecycle in
+    trade_records.
+    """
+    RISK_APPROVED = "RISK_APPROVED"
+    HUMAN_APPROVED = "HUMAN_APPROVED"
+    EXECUTION_PENDING = "EXECUTION_PENDING"
+    EXECUTED = "EXECUTED"
+
 class ExecutionStatus(str, Enum):
     ACCEPTED = "ACCEPTED"
     PENDING = "PENDING"
@@ -48,6 +65,48 @@ class MemoryInfluence(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
+
+class ClaimStatus(str, Enum):
+    SUPPORTED = "SUPPORTED"
+    UNSUPPORTED = "UNSUPPORTED"
+    UNVERIFIABLE = "UNVERIFIABLE"
+
+class ClaimSeverity(str, Enum):
+    INFO = "INFO"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+class AuditStatus(str, Enum):
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    MISSING_EVIDENCE = "MISSING_EVIDENCE"
+    STALE_OR_MISMATCHED = "STALE_OR_MISMATCHED"
+
+class EvidenceAuditClaim(BaseModel):
+    claim: str
+    status: ClaimStatus
+    evidence_source: Optional[str] = None
+    claimed_value: Optional[str] = None
+    observed_value: Optional[str] = None
+    explanation: str
+    severity: ClaimSeverity = ClaimSeverity.INFO
+
+class EvidenceAuditReport(BaseModel):
+    audit_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    symbol: str
+    overall_status: AuditStatus
+    summary: str
+    claims: List[EvidenceAuditClaim] = Field(default_factory=list)
+    supported_count: int = 0
+    unsupported_count: int = 0
+    unverifiable_count: int = 0
+    evidence_available: bool = True
+    snapshot_timestamp: Optional[datetime] = None
+    proposal_action: Optional[Action] = None
 
 class PortfolioState(BaseModel):
     account_equity: float = Field(ge=0)
@@ -120,6 +179,32 @@ class ApprovedTrade(BaseModel):
     proposal: TradeProposal
     approved_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class PendingProposal(BaseModel):
+    """A risk-approved TradeProposal awaiting human approval.
+
+    Stored in the `pending_proposals` SQLite table.  All trade terms
+    (quantity, action, symbol, reference_price, stop_loss, snapshot_timestamp)
+    are IMMUTABLE after creation.  Only lifecycle_status and human_approved_at
+    may be updated, and only via the atomic conditional DB transition.
+    """
+    trade_id: uuid.UUID
+    thesis_id: uuid.UUID
+    symbol: str
+    action: Action
+    quantity: float = Field(gt=0)
+    reference_price: float = Field(gt=0)     # current_price at risk-eval time
+    stop_loss: Optional[float] = None
+    snapshot_timestamp: datetime             # MarketSnapshot.timestamp at risk-eval
+    risk_decision: RiskStatus
+    risk_reasons: List[str]
+    risk_evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    lifecycle_status: TradeLifecycleStatus = TradeLifecycleStatus.RISK_APPROVED
+    human_approved_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Full immutable TradeProposal JSON (used for re-validation at approval time)
+    proposal_snapshot: TradeProposal
+    evidence_audit: Optional[EvidenceAuditReport] = None
+
 class RiskDecision(BaseModel):
     status: RiskStatus
     reasons: List[str]
@@ -172,6 +257,7 @@ class TradeRecord(BaseModel):
     exit_timestamp: Optional[datetime] = None
     realized_pnl: Optional[float] = None
     realized_return_pct: Optional[float] = None
+    evidence_audit: Optional[EvidenceAuditReport] = None
 
     @property
     def remaining_quantity(self) -> float:

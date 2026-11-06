@@ -23,6 +23,7 @@ import enum
 import sys
 import textwrap
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from tradepilot.alpaca.client import get_alpaca_client
@@ -195,6 +196,21 @@ def get_trace_data(
             f"Status: {live_status or record.execution_status.value} | Filled qty: {qty_str}"
         )
 
+    # ── Evidence Audit (Step 10) ──────────────────────────────────────────────
+    # Only use an audit that was genuinely persisted against the original snapshot.
+    # IMPORTANT: Do NOT reconstruct a synthetic MarketSnapshot from thesis text and
+    # audit the thesis against its own data — that is a circular self-validation
+    # that produces a false PASSED result. If no real audit exists, report
+    # MISSING_EVIDENCE honestly.
+    evidence_audit = journal.get_evidence_audit_by_trade_id(record.trade_id)
+    if evidence_audit is None:
+        evidence_audit = getattr(record, "evidence_audit", None)
+    if evidence_audit is None:
+        from tradepilot.agents.evidence_auditor import EvidenceAuditor
+        auditor = EvidenceAuditor()
+        # No persisted real snapshot available — report MISSING_EVIDENCE.
+        evidence_audit = auditor.audit(record, snapshot=None, symbol=record.symbol)
+
     return {
         "record": record,
         "live_status": live_status,
@@ -213,6 +229,7 @@ def get_trace_data(
         "actual_fill_price": actual_fill_price,
         "demo_note": demo_note,
         "outcome_line": outcome_line,
+        "evidence_audit": evidence_audit,
     }
 
 
@@ -423,6 +440,26 @@ def build_trace(
         print(_wrap(memories[0].lesson))
     else:
         print("    No memories yet -- run forensics after position closes.")
+    print()
+    print(_sep("20 . AI DECISION EVIDENCE AUDIT"))
+    evidence_audit = data.get("evidence_audit")
+    if evidence_audit:
+        print(f"    Overall Status : {evidence_audit.overall_status.value}")
+        print(f"    Summary        : {evidence_audit.summary}")
+        if evidence_audit.claims:
+            print("    Audited Claims :")
+            for c in evidence_audit.claims:
+                src = f" ({c.evidence_source})" if c.evidence_source else ""
+                print(f"      * [{c.status.value}] ({c.severity.value}) {c.claim}{src}")
+                print(f"        {c.explanation}")
+    else:
+        print("    (no audit recorded)")
+    print()
+    print("  ? Was the decision evidence verified?")
+    if evidence_audit:
+        print(f"    Auditor: {evidence_audit.overall_status.value} ({evidence_audit.supported_count} supported, {evidence_audit.unsupported_count} unsupported, {evidence_audit.unverifiable_count} unverifiable)")
+    else:
+        print("    Auditor: Evidence audit not conducted.")
     print()
     print(W)
     print()

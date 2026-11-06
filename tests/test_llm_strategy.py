@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
 from pydantic import ValidationError
@@ -30,7 +30,8 @@ def portfolio():
         cash=100000.0,
         current_daily_loss=0.0,
         open_positions=[],
-        number_of_open_positions=0
+        number_of_open_positions=0,
+        position_quantities={}
     )
 
 @pytest.fixture
@@ -42,30 +43,32 @@ def risk_engine():
         daily_loss_limit=2000.0
     )
 
-def create_mock_response(strategy_proposal_dict=None, raise_error=False, raw_text=""):
-    class MockResponse:
-        def __init__(self):
-            if raise_error:
-                raise Exception("API Error")
-            if strategy_proposal_dict is not None:
-                try:
-                    self.parsed = StrategyProposal(**strategy_proposal_dict)
-                except ValidationError:
-                    # Let the LLMStrategyAgent handle the error just like the real SDK would
-                    # if we fallback to json string parsing, but here the SDK throws ValidationError directly 
-                    # if the schema doesn't match when using 'parsed'.
-                    # For testing we'll just mock it so that the code triggers the catch block
-                    raise ValidationError.from_exception_data("Mock Error", [])
-            else:
-                self.parsed = None
-            self.text = raw_text
-    return MockResponse()
+
+def _mock_client_with_response(mock_client_class, mock_response):
+    """
+    Wire mock so that client.chats.create() returns a chat
+    whose send_message() returns mock_response.
+    """
+    mock_chat = MagicMock()
+    mock_chat.send_message.return_value = mock_response
+    mock_client = MagicMock()
+    mock_client.chats.create.return_value = mock_chat
+    mock_client_class.return_value = mock_client
+    return mock_client
+
+
+def _mock_client_with_side_effect(mock_client_class, side_effect):
+    """Wire mock so that send_message raises side_effect."""
+    mock_chat = MagicMock()
+    mock_chat.send_message.side_effect = side_effect
+    mock_client = MagicMock()
+    mock_client.chats.create.return_value = mock_chat
+    mock_client_class.return_value = mock_client
+    return mock_client
+
 
 @patch('google.genai.Client')
 def test_valid_structured_response(mock_client_class, snapshot, portfolio):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    
     mock_response = MagicMock()
     mock_response.parsed = StrategyProposal(
         action=Action.BUY,
@@ -77,9 +80,8 @@ def test_valid_structured_response(mock_client_class, snapshot, portfolio):
         suggested_stop_loss=140.0,
         reasoning_summary="Summary"
     )
-    mock_client.models.generate_content.return_value = mock_response
+    _mock_client_with_response(mock_client_class, mock_response)
     
-    # Must explicitly enable gemini key for test
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
     
@@ -92,14 +94,10 @@ def test_valid_structured_response(mock_client_class, snapshot, portfolio):
 
 @patch('google.genai.Client')
 def test_invalid_confidence(mock_client_class, snapshot, portfolio):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    
-    # Validation error raised by Pydantic during mock construction
-    def side_effect(*args, **kwargs):
-        raise ValidationError.from_exception_data("Invalid confidence", [])
-        
-    mock_client.models.generate_content.side_effect = side_effect
+    _mock_client_with_side_effect(
+        mock_client_class,
+        ValidationError.from_exception_data("Invalid confidence", [])
+    )
     
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
@@ -108,13 +106,10 @@ def test_invalid_confidence(mock_client_class, snapshot, portfolio):
 
 @patch('google.genai.Client')
 def test_invalid_action(mock_client_class, snapshot, portfolio):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    
-    def side_effect(*args, **kwargs):
-        raise ValidationError.from_exception_data("Invalid action", [])
-        
-    mock_client.models.generate_content.side_effect = side_effect
+    _mock_client_with_side_effect(
+        mock_client_class,
+        ValidationError.from_exception_data("Invalid action", [])
+    )
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
     proposal = agent.generate_proposal(snapshot, portfolio)
@@ -122,13 +117,10 @@ def test_invalid_action(mock_client_class, snapshot, portfolio):
 
 @patch('google.genai.Client')
 def test_missing_required_fields(mock_client_class, snapshot, portfolio):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    
-    def side_effect(*args, **kwargs):
-        raise ValidationError.from_exception_data("Missing field", [])
-        
-    mock_client.models.generate_content.side_effect = side_effect
+    _mock_client_with_side_effect(
+        mock_client_class,
+        ValidationError.from_exception_data("Missing field", [])
+    )
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
     proposal = agent.generate_proposal(snapshot, portfolio)
@@ -136,9 +128,6 @@ def test_missing_required_fields(mock_client_class, snapshot, portfolio):
     
 @patch('google.genai.Client')
 def test_invalid_stop_loss(mock_client_class, snapshot, portfolio):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    
     mock_response = MagicMock()
     mock_response.parsed = StrategyProposal(
         action=Action.BUY,
@@ -150,7 +139,7 @@ def test_invalid_stop_loss(mock_client_class, snapshot, portfolio):
         suggested_stop_loss=160.0, # INVALID: above current price (150)
         reasoning_summary="Summary"
     )
-    mock_client.models.generate_content.return_value = mock_response
+    _mock_client_with_response(mock_client_class, mock_response)
     
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
@@ -160,9 +149,10 @@ def test_invalid_stop_loss(mock_client_class, snapshot, portfolio):
 
 @patch('google.genai.Client')
 def test_llm_api_failure(mock_client_class, snapshot, portfolio):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    mock_client.models.generate_content.side_effect = Exception("503 Service Unavailable")
+    _mock_client_with_side_effect(
+        mock_client_class,
+        Exception("503 Service Unavailable")
+    )
     
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
@@ -171,12 +161,10 @@ def test_llm_api_failure(mock_client_class, snapshot, portfolio):
 
 @patch('google.genai.Client')
 def test_empty_response(mock_client_class, snapshot, portfolio):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
     mock_response = MagicMock()
     mock_response.parsed = None
     mock_response.text = "" # Will fail JSON validation
-    mock_client.models.generate_content.return_value = mock_response
+    _mock_client_with_response(mock_client_class, mock_response)
     
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
@@ -185,9 +173,6 @@ def test_empty_response(mock_client_class, snapshot, portfolio):
 
 @patch('google.genai.Client')
 def test_llm_proposes_buy_risk_rejects(mock_client_class, snapshot, portfolio, risk_engine):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    
     mock_response = MagicMock()
     mock_response.parsed = StrategyProposal(
         action=Action.BUY,
@@ -199,7 +184,7 @@ def test_llm_proposes_buy_risk_rejects(mock_client_class, snapshot, portfolio, r
         suggested_stop_loss=140.0,
         reasoning_summary="Summary"
     )
-    mock_client.models.generate_content.return_value = mock_response
+    _mock_client_with_response(mock_client_class, mock_response)
     
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
@@ -212,9 +197,6 @@ def test_llm_proposes_buy_risk_rejects(mock_client_class, snapshot, portfolio, r
 
 @patch('google.genai.Client')
 def test_llm_proposes_buy_risk_approves(mock_client_class, snapshot, portfolio, risk_engine):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    
     mock_response = MagicMock()
     mock_response.parsed = StrategyProposal(
         action=Action.BUY,
@@ -226,7 +208,7 @@ def test_llm_proposes_buy_risk_approves(mock_client_class, snapshot, portfolio, 
         suggested_stop_loss=140.0,
         reasoning_summary="Summary"
     )
-    mock_client.models.generate_content.return_value = mock_response
+    _mock_client_with_response(mock_client_class, mock_response)
     
     settings.gemini_api_key = "test_key"
     agent = LLMStrategyAgent()
@@ -237,9 +219,6 @@ def test_llm_proposes_buy_risk_approves(mock_client_class, snapshot, portfolio, 
 
 @patch('google.genai.Client')
 def test_llm_cannot_control_quantity(mock_client_class, snapshot, portfolio):
-    mock_client = MagicMock()
-    mock_client_class.return_value = mock_client
-    
     mock_response = MagicMock()
     # StrategyProposal explicitly lacks quantity field
     mock_response.parsed = StrategyProposal(
@@ -252,7 +231,7 @@ def test_llm_cannot_control_quantity(mock_client_class, snapshot, portfolio):
         suggested_stop_loss=140.0,
         reasoning_summary="Summary"
     )
-    mock_client.models.generate_content.return_value = mock_response
+    _mock_client_with_response(mock_client_class, mock_response)
     
     settings.gemini_api_key = "test_key"
     settings.max_position_pct = 0.1 # 10% of 100k = 10k

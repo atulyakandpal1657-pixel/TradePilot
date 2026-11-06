@@ -12,13 +12,13 @@ from tradepilot.core.models import (
     TimeInForce
 )
 from tradepilot.core.config import settings
+from tradepilot.core.sizing import calculate_position_size
 
 class StrategyAgent(ABC):
     """
     Abstract interface for Strategy Agents.
     This enables us to swap the deterministic baseline with an LLM later.
     """
-    @abstractmethod
     def generate_proposal(
         self, 
         snapshot: MarketSnapshot, 
@@ -30,15 +30,6 @@ class StrategyAgent(ABC):
         Returns None if no trade should be taken.
         """
         pass
-        
-    def _calculate_position_size(self, current_price: float, portfolio: PortfolioState, max_pct: float) -> float:
-        """
-        Calculates a safe position size based on account equity, NOT buying power.
-        """
-        max_notional = portfolio.account_equity * max_pct
-        # Round down to nearest whole share
-        quantity = int(max_notional / current_price)
-        return float(quantity)
 
 class DeterministicBaselineStrategy(StrategyAgent):
     """
@@ -66,7 +57,7 @@ class DeterministicBaselineStrategy(StrategyAgent):
             return None # NO TRADE
             
         # Position Sizing
-        quantity = self._calculate_position_size(
+        quantity = calculate_position_size(
             current_price=snapshot.current_price,
             portfolio=portfolio,
             max_pct=settings.max_position_pct

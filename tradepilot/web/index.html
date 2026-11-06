@@ -18,6 +18,127 @@
     </header>
 
     <main class="dashboard">
+        <!-- MARKET WATCH -->
+        <section class="card full-width" id="market-watch-section">
+            <div class="market-watch-header">
+                <h2>MARKET WATCH</h2>
+                <div class="market-watch-controls">
+                    <span id="market-last-updated" class="market-last-updated"></span>
+                    <button id="market-refresh-btn" class="btn-refresh">↻ Refresh</button>
+                </div>
+            </div>
+            <!-- Three ticker cards: PLTR, NVDA, AAPL -->
+            <div class="market-ticker-row" id="market-ticker-row">
+                <!-- Populated by app.js marketWatch module -->
+            </div>
+            <!-- Detail panel shown when a ticker is selected -->
+            <div class="market-detail-panel" id="market-detail-panel" style="display:none">
+                <!-- Populated by app.js marketWatch module -->
+            </div>
+        </section>
+
+        <!-- ACCOUNT SNAPSHOT -->
+        <section class="card full-width" id="account-snapshot-section">
+            <div class="market-watch-header">
+                <h2>ACCOUNT SNAPSHOT</h2>
+            </div>
+            <div id="account-snapshot-content" style="display:flex; gap:20px; flex-wrap:wrap; margin-top: 10px;">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+
+        <!-- TRADE JOURNAL -->
+        <section class="card full-width" id="trade-journal-section">
+            <h2>TRADE JOURNAL</h2>
+            <div id="trade-journal-content" style="margin-top: 15px; overflow-x: auto;">
+                <table class="journal-table" style="width:100%; text-align:left; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <th>Date</th>
+                            <th>Symbol</th>
+                            <th>Action</th>
+                            <th>Qty</th>
+                            <th>Order Type</th>
+                            <th>Lifecycle</th>
+                            <th>Execution</th>
+                            <th>Filled Qty</th>
+                            <th>Fill Price</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trade-journal-body">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- BACKTESTING -->
+        <section class="card full-width" id="backtesting-section">
+            <h2>BACKTESTING</h2>
+            <div style="margin-top: 15px;">
+                <p style="font-size: 0.9em; color: var(--text-muted); margin-bottom: 15px;">
+                    Backtesting uses daily historical data. Strategy decisions are evaluated using information available through each completed daily bar. Entries and stop-loss exits are simulated at the following trading day's opening price.<br>
+                    <strong style="color:var(--text-secondary);">This is a historical simulation, not a prediction of future returns.</strong>
+                </p>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap:wrap;">
+                    <label>Symbol: <input type="text" id="bt-symbol" value="AAPL" style="width: 80px; padding:4px;"></label>
+                    <label>Start: <input type="date" id="bt-start" value="2025-01-01" style="padding:4px;"></label>
+                    <label>End: <input type="date" id="bt-end" value="2026-01-01" style="padding:4px;"></label>
+                    <label>Capital ($): <input type="number" id="bt-capital" value="10000" style="width: 100px; padding:4px;"></label>
+                    <button id="bt-run-btn" class="btn-refresh" style="padding:6px 12px; font-weight:bold;">Run Backtest</button>
+                </div>
+                <div id="bt-status" style="margin-bottom: 15px; color: var(--accent); font-weight:bold;"></div>
+                <div id="bt-results" style="display: none;">
+                    <h3 style="margin-bottom:10px;">Summary</h3>
+                    <div id="bt-summary" style="display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 20px; align-items: flex-start;"></div>
+
+                    <!-- Buy-and-hold benchmark comparison (populated by JS) -->
+                    <div id="bt-benchmark" style="display:none; margin-bottom: 20px; padding: 16px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,0.02);"></div>
+                    
+                    <h3 style="margin-bottom:10px;">Equity Curve</h3>
+                    <div id="bt-equity-chart" style="height: 150px; border: 1px solid var(--border); margin-bottom: 20px; display: flex; align-items: flex-end; padding: 5px; gap: 1px; background: rgba(255,255,255,0.02); overflow-x: auto;">
+                        <!-- simple CSS bars for equity -->
+                    </div>
+
+                    <h3 style="margin-bottom:10px;">Trade History</h3>
+                    <div style="overflow-x: auto;">
+                        <table class="journal-table" style="width:100%; text-align:left; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border);">
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                    <th>Qty</th>
+                                    <th>Entry Price</th>
+                                    <th>Exit Date</th>
+                                    <th>Exit Price</th>
+                                    <th>Stop Loss</th>
+                                    <th>P&L</th>
+                                    <th>P&L %</th>
+                                    <th>Exit Reason</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bt-trades-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TRADE DETAILS MODAL (Hidden by default) -->
+        <div id="trade-details-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:var(--bg-card); border:1px solid var(--border); padding:20px; z-index:100; box-shadow: 0 4px 15px rgba(0,0,0,0.5); min-width: 450px; max-width: 650px; max-height: 85vh; overflow-y: auto; border-radius: 8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:15px;">
+                <h3 style="margin:0;">Trade Details</h3>
+                <button onclick="document.getElementById('trade-details-modal').style.display='none'" style="background:none; border:none; color:var(--text-primary); cursor:pointer; font-size:1.2rem;">&times;</button>
+            </div>
+            <div id="trade-details-content" style="display:flex; flex-direction:column; gap:10px;">
+                <!-- Populated by JS -->
+            </div>
+            <div style="margin-top:20px; text-align:right;">
+                <button id="view-trace-btn" class="btn" style="background:var(--accent); color:#fff; border:none; padding:8px 16px; cursor:pointer; border-radius:4px;">View Decision Trace</button>
+            </div>
+        </div>
+
         <div class="grid">
             <!-- 1. MARKET SNAPSHOT -->
             <section class="card">
@@ -52,6 +173,17 @@
             </section>
         </div>
 
+        <!-- EVIDENCE AUDIT (Step 10) -->
+        <section class="card full-width" id="evidence-audit-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                <h2 style="margin: 0; border: none; padding: 0;">AI DECISION EVIDENCE AUDITOR</h2>
+                <div id="evidence-audit-badge-container"></div>
+            </div>
+            <div id="evidence-audit-container">
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Select a trade from the journal or analyze a symbol in Market Watch to review evidence verification.</p>
+            </div>
+        </section>
+
         <!-- 6. DECISION TRACE -->
         <section class="card full-width">
             <h2>DECISION TRACE TIMELINE</h2>
@@ -69,6 +201,6 @@
         </section>
     </main>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=9"></script>
 </body>
 </html>

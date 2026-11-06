@@ -176,3 +176,309 @@ ul {
     color: var(--accent);
     border-color: var(--accent);
 }
+
+/* ── Market Watch ─────────────────────────────────────────────────────────── */
+
+.market-watch-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+}
+
+.market-watch-header h2 {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.market-watch-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.market-last-updated {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.btn-refresh {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: background 0.2s, color 0.2s;
+    letter-spacing: 0.5px;
+}
+
+.btn-refresh:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.btn-refresh:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Ticker row */
+.market-ticker-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.market-ticker-card {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    min-width: 180px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    user-select: none;
+}
+
+.market-ticker-card:hover {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.market-ticker-card.selected {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.market-ticker-card.unavailable {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.market-ticker-card.unavailable:hover {
+    border-color: var(--border);
+    background: var(--bg-hover);
+}
+
+.ticker-symbol {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.ticker-price {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.ticker-change {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.ticker-change.pos { color: var(--success); }
+.ticker-change.neg { color: var(--danger); }
+.ticker-change.neutral { color: var(--text-secondary); }
+
+.ticker-indicators {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ticker-loading {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.ticker-unavailable {
+    font-size: 0.8rem;
+    color: var(--danger);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Detail panel */
+.market-detail-panel {
+    background: var(--bg-hover);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 18px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.market-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.market-detail-symbol {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+}
+
+.market-detail-note {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    max-width: 260px;
+    text-align: right;
+    line-height: 1.4;
+}
+
+.market-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0;
+}
+
+/* Trade Journal Styles */
+.journal-table th, .journal-table td {
+    padding: 12px 10px;
+}
+.journal-table th {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+}
+.journal-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.journal-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Backtest Summary Groups */
+.bt-metrics-group {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    min-width: 200px;
+    flex: 1 1 auto;
+}
+
+.bt-group-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+}
+
+/* Evidence Audit Styles (Step 10) */
+.badge.supported { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid #10b981; }
+.badge.unsupported { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid #ef4444; }
+.badge.unverifiable { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid #f59e0b; }
+.badge.missing-evidence { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid #a855f7; }
+.badge.inconclusive { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid #64748b; }
+
+.severity-pill {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.severity-critical { background: #dc2626; color: #fff; }
+.severity-high { background: #ea580c; color: #fff; }
+.severity-medium { background: #d97706; color: #fff; }
+.severity-low { background: #475569; color: #e2e8f0; }
+.severity-info { background: #2563eb; color: #fff; }
+
+.audit-claim-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    transition: background 0.15s ease;
+}
+.audit-claim-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+.audit-claim-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+.audit-claim-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+.audit-claim-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.audit-claim-source {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+}
+.audit-claim-explanation {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+.audit-summary-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.audit-missing-alert {
+    padding: 12px 16px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid var(--warning);
+    color: var(--warning);
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+}
