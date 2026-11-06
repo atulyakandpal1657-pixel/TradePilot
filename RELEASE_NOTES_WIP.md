@@ -69,3 +69,42 @@
     - Post-baseline copy: `C:\Users\atuly\.gemini\antigravity\brain\bd783083-08d3-4de9-8cd8-711fb5411e0d\db_backup\tradepilot_post_baseline.db`
   - Per instructions ("treat that as a defect and fix it by isolating the test, not by restoring the file afterward"), an `autouse=True` fixture was added to `tests/test_api_risk.py` redirecting `tradepilot.api.DB_PATH` to `tmp_path / "test_api_risk.db"`.
   - Re-run of `tests/test_api_risk.py` confirmed 13 passed in 1.57s with identical checksum before and after (`45F09E205997B3215A1FCBFD4ADF156E7BF1D2CA1A076CA40D334F2C3677950B`).
+
+## 5. Phase B: EvidenceAuditor Enum Mapping, Precedence & Proposal Shapes
+- **AuditStatus Enum Verification:**
+  - Evaluated `AuditStatus` in `tradepilot/core/models.py`.
+  - Canonical categories confirmed 1:1 mapping:
+    - `MISSING_EVIDENCE` -> `AuditStatus.MISSING_EVIDENCE`
+    - `STALE_OR_MISMATCHED` -> `AuditStatus.STALE_OR_MISMATCHED`
+    - `FAILED` -> `AuditStatus.FAILED`
+    - `INCONCLUSIVE` -> `AuditStatus.INCONCLUSIVE`
+    - `PASSED` -> `AuditStatus.PASSED`
+  - No intermediate, ambiguous, or unmapped states.
+- **EvidenceAuditor Root Cause Defect Fixed:**
+  - In `tradepilot/agents/evidence_auditor.py`, forward-looking assumptions and invalidation conditions were previously counted towards `unverifiable_count > 0` which forced `overall_status` into `INCONCLUSIVE`, even when all factual market and portfolio claims passed.
+  - Separated factual evidence gaps (e.g. absent indicators like RSI/VWAP/MACD, missing portfolio state when a portfolio metric was claimed, unparseable numeric values, absent snapshot fields) from qualitative assumptions and invalidation conditions.
+  - Implemented exact precedence order:
+    `MISSING_EVIDENCE > STALE_OR_MISMATCHED > FAILED > INCONCLUSIVE > PASSED`
+    1. `MISSING_EVIDENCE`: `snapshot is None` immediately returns `MISSING_EVIDENCE`.
+    2. `STALE_OR_MISMATCHED`: Snapshot symbol mismatch, expected snapshot timestamp mismatch (>60s), or proposal lookahead/stale timestamp (>300s) produces `STALE_OR_MISMATCHED`.
+    3. `FAILED`: Any unsupported factual claim makes the result `FAILED`, even if other claims are unverifiable or missing evidence.
+    4. `INCONCLUSIVE`: When no claims failed, but factual evidence gaps exist (absent indicators, missing portfolio data when claimed, unparseable values, or no verifiable factual claims were extracted).
+    5. `PASSED`: All verifiable factual claims are supported (at least 1 verifiable factual claim extracted, 0 unsupported claims, 0 factual gaps, matching symbol/snapshot window). Qualitative assumptions are noted in the summary but do not degrade `PASSED` to `INCONCLUSIVE`.
+- **Handling of All Proposal Representations:**
+  - Added import `PendingProposal` in `tradepilot/agents/evidence_auditor.py`.
+  - Added full `PendingProposal` support to `_extract_proposal_fields()`, extracting from `proposal.proposal_snapshot` and capturing `expected_snapshot_timestamp=proposal.snapshot_timestamp`.
+  - Verified `StrategyProposal`, `TradeProposal`, `TradeRecord`, `PendingProposal`, and plain `dict`.
+- **Test Corrections Under Test-Versus-Semantics Rule:**
+  - `test_audit_absent_portfolio_not_treated_as_false`: Updated line 257 from `assert report.overall_status == AuditStatus.PASSED` to `assert report.overall_status == AuditStatus.INCONCLUSIVE`. When cash is explicitly claimed in the proposal evidence, missing portfolio state represents a genuine factual evidence gap, which must report `INCONCLUSIVE`.
+  - `test_journal_isolation`: Added `sample_portfolio` fixture and passed `portfolio=sample_portfolio` to `auditor.audit()` so that `Cash: 10000` is verified against portfolio state, correctly asserting `AuditStatus.PASSED`.
+  - `test_api_trace_includes_evidence_audit`: Passed `portfolio=sample_portfolio` (already present in test arguments) to `auditor.audit()` so that the audit is complete and produces `AuditStatus.PASSED`.
+- **New Regression Tests Added to `tests/test_evidence_auditor.py`:**
+  - `test_audit_pending_proposal_shape`: Verifies `PendingProposal` is cleanly extracted and audited.
+  - `test_precedence_missing_evidence_over_mismatch`: Verifies `snapshot is None` yields `MISSING_EVIDENCE` even if symbol mismatch occurs.
+  - `test_precedence_stale_or_mismatch_over_failed`: Verifies snapshot symbol mismatch yields `STALE_OR_MISMATCHED` over unsupported factual claims.
+  - `test_precedence_failed_over_inconclusive`: Verifies unsupported claim yields `FAILED` even when absent indicators (RSI) coexist.
+  - `test_precedence_inconclusive_over_passed`: Verifies absent indicator (RSI) yields `INCONCLUSIVE` despite supported price claim.
+  - `test_passed_with_qualitative_assumptions`: Verifies qualitative forward-looking assumptions do not degrade an otherwise supported audit to `INCONCLUSIVE`.
+- **Test Results:** 33 passed, 0 failed in 2.16s.
+- **Database Checksum:** Verified unchanged (`45F09E205997B3215A1FCBFD4ADF156E7BF1D2CA1A076CA40D334F2C3677950B`).
+

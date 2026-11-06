@@ -35,6 +35,7 @@ from tradepilot.core.models import (
     EvidenceAuditClaim,
     EvidenceAuditReport,
     MarketSnapshot,
+    PendingProposal,
     PortfolioState,
     StrategyProposal,
     TradeProposal,
@@ -206,36 +207,64 @@ class EvidenceAuditor:
             verified_claims.append(verified_claim)
 
         # ── 4. Verify Proposal vs Snapshot Timestamp Deterministically ────────
+        has_timestamp_mismatch = False
         if p_timestamp is not None:
             ts_claim = self._verify_timestamp(p_timestamp, snapshot.timestamp)
             if ts_claim is not None:
                 verified_claims.append(ts_claim)
+                if ts_claim.status == ClaimStatus.UNSUPPORTED and "lookahead or clock mismatch" in ts_claim.explanation:
+                    has_timestamp_mismatch = True
 
         # ── 5. Aggregate Results & Overall Status ─────────────────────────────
         supported_count = sum(1 for c in verified_claims if c.status == ClaimStatus.SUPPORTED)
         unsupported_count = sum(1 for c in verified_claims if c.status == ClaimStatus.UNSUPPORTED)
         unverifiable_count = sum(1 for c in verified_claims if c.status == ClaimStatus.UNVERIFIABLE)
 
-        # Handle empty claim sets honestly
-        if not verified_claims:
-            overall_status = AuditStatus.INCONCLUSIVE
-            summary = "No factual claims identified for audit. Status: INCONCLUSIVE (cannot pass without verifiable claims)."
+        # Factual claims vs qualitative assumptions:
+        # Qualitative claims (assumptions, invalidations, advisory NO_TRADE stop loss)
+        # must not cause an otherwise supported audit to become INCONCLUSIVE.
+        factual_gap_claims = []
+        for c in verified_claims:
+            if c.status == ClaimStatus.UNVERIFIABLE:
+                if c.claim.startswith("Assumption: ") or c.claim.startswith("Invalidation condition: "):
+                    continue
+                if action == Action.NO_TRADE and c.evidence_source == "MarketSnapshot.current_price vs StopLoss":
+                    continue
+                factual_gap_claims.append(c)
+
+        factual_gap_count = len(factual_gap_claims)
+
+        # Enforce exact precedence:
+        # MISSING_EVIDENCE > STALE_OR_MISMATCHED > FAILED > INCONCLUSIVE > PASSED
+        if has_timestamp_mismatch:
+            overall_status = AuditStatus.STALE_OR_MISMATCHED
+            summary = (
+                "Snapshot timestamp lookahead or mismatch detected relative to proposal timestamp."
+            )
         elif unsupported_count > 0:
             overall_status = AuditStatus.FAILED
             summary = (
                 f"Audit failed: {unsupported_count} unsupported claim(s) detected. "
                 f"({supported_count} supported, {unverifiable_count} unverifiable)."
             )
-        elif unverifiable_count > 0:
+        elif factual_gap_count > 0:
+            overall_status = AuditStatus.INCONCLUSIVE
+            gap_summary = ", ".join(c.claim for c in factual_gap_claims[:3])
+            summary = (
+                f"Audit inconclusive: {factual_gap_count} factual claim(s) could not be verified due to missing evidence or absent fields ({gap_summary}). "
+                f"({supported_count} supported, 0 unsupported)."
+            )
+        elif not verified_claims or supported_count == 0:
             overall_status = AuditStatus.INCONCLUSIVE
             summary = (
-                f"Audit inconclusive: {unverifiable_count} claim(s) remain unverifiable or claim coverage is incomplete. "
-                f"({supported_count} supported, 0 unsupported)."
+                "No verifiable factual claims identified for audit. "
+                "Status: INCONCLUSIVE (cannot pass without verifiable claims)."
             )
         else:
             overall_status = AuditStatus.PASSED
+            qual_note = f" ({unverifiable_count} qualitative assumption(s) noted)" if unverifiable_count > 0 else ""
             summary = (
-                f"Audit passed: all {supported_count} verifiable claim(s) are supported by MarketSnapshot."
+                f"Audit passed: all {supported_count} verifiable claim(s) are supported by MarketSnapshot{qual_note}."
             )
 
         return EvidenceAuditReport(
@@ -257,7 +286,7 @@ class EvidenceAuditor:
 
     def _extract_proposal_fields(
         self,
-        proposal: Union[StrategyProposal, TradeProposal, TradeRecord, Dict[str, Any]],
+        proposal: Union[StrategyProposal, TradeProposal, TradeRecord, PendingProposal, Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Extract canonical fields from various proposal shapes."""
         if isinstance(proposal, StrategyProposal):
@@ -271,6 +300,21 @@ class EvidenceAuditor:
                 "assumptions": list(proposal.assumptions),
                 "invalidation_conditions": list(proposal.invalidation_conditions),
                 "suggested_stop_loss": proposal.suggested_stop_loss,
+            }
+        elif isinstance(proposal, PendingProposal):
+            thesis_text, evidence_text, summary_text = self._parse_reasoning_blocks(proposal.proposal_snapshot.reasoning)
+            return {
+                "symbol": proposal.symbol,
+                "action": proposal.action,
+                "confidence": proposal.proposal_snapshot.confidence,
+                "thesis": thesis_text,
+                "evidence": evidence_text,
+                "summary": summary_text,
+                "assumptions": list(proposal.proposal_snapshot.assumptions),
+                "invalidation_conditions": list(proposal.proposal_snapshot.invalidation_conditions),
+                "suggested_stop_loss": proposal.stop_loss,
+                "expected_snapshot_timestamp": proposal.snapshot_timestamp,
+                "timestamp": proposal.created_at,
             }
         elif isinstance(proposal, TradeProposal):
             thesis_text, evidence_text, summary_text = self._parse_reasoning_blocks(proposal.reasoning)

@@ -253,8 +253,8 @@ def test_audit_absent_portfolio_not_treated_as_false(sample_snapshot):
     assert cash_claim.status == ClaimStatus.UNVERIFIABLE
     assert cash_claim.status != ClaimStatus.UNSUPPORTED
     assert "not provided" in cash_claim.explanation.lower()
-    # Overall status should still pass on the valid price check
-    assert report.overall_status == AuditStatus.PASSED
+    # Overall status is INCONCLUSIVE due to evidence gap on claimed portfolio metric (Test-versus-semantics rule)
+    assert report.overall_status == AuditStatus.INCONCLUSIVE
 
 
 # ── 4. Unverifiable Claims (Forward-Looking Assumptions) ──────────────────────
@@ -459,10 +459,10 @@ def test_audit_produces_no_gemini_calls_by_default(sample_snapshot, sample_portf
             mock_gen.assert_not_called()
 
 
-def test_journal_isolation(tmp_journal, sample_snapshot, supported_proposal):
+def test_journal_isolation(tmp_journal, sample_snapshot, sample_portfolio, supported_proposal):
     """Saving evidence audits writes only to evidence_audits table, never trade_records."""
     auditor = EvidenceAuditor()
-    report = auditor.audit(supported_proposal, snapshot=sample_snapshot, symbol="PLTR")
+    report = auditor.audit(supported_proposal, snapshot=sample_snapshot, portfolio=sample_portfolio, symbol="PLTR")
 
     trade_id = uuid.uuid4()
     tmp_journal.save_evidence_audit(report, trade_id=trade_id)
@@ -529,7 +529,7 @@ def test_api_trace_includes_evidence_audit(tmp_path, sample_snapshot, sample_por
     journal.save_record(record)
 
     auditor = EvidenceAuditor()
-    audit_report = auditor.audit(record, snapshot=sample_snapshot, symbol="PLTR")
+    audit_report = auditor.audit(record, snapshot=sample_snapshot, portfolio=sample_portfolio, symbol="PLTR")
     journal.save_evidence_audit(audit_report, trade_id=tid)
 
     with patch("tradepilot.api.DB_PATH", db_path):
@@ -781,3 +781,145 @@ def test_repeated_audits_are_preserved_as_distinct_records(tmp_journal, sample_s
     all_ids = {a.audit_id for a in tmp_journal.list_evidence_audits()}
     assert r1.audit_id in all_ids, "r1 must appear in list_evidence_audits"
     assert r2.audit_id in all_ids, "r2 must appear in list_evidence_audits"
+
+
+# ── 18. PendingProposal Representation and Precedence Order Regressions ──────
+
+def test_audit_pending_proposal_shape(sample_snapshot, sample_portfolio):
+    """PendingProposal shape is cleanly extracted and audited."""
+    from tradepilot.agents.evidence_auditor import EvidenceAuditor
+    from tradepilot.core.models import PendingProposal, TradeProposal
+
+    t_prop = TradeProposal(
+        trade_id=uuid.uuid4(),
+        thesis_id=uuid.uuid4(),
+        symbol="PLTR",
+        action=Action.BUY,
+        quantity=10.0,
+        current_price=186.24,
+        stop_loss=170.0,
+        confidence=0.85,
+        reasoning=(
+            "PLTR is in an uptrend with price at 186.24.\n\n"
+            "Evidence:\nPrice: 186.24, SMA20: 171.03, Cash: 10000\n\n"
+            "Summary:\nBullish alignment."
+        ),
+        assumptions=["Momentum continues."],
+        invalidation_conditions=["Price drops below 170.0."],
+    )
+    pending = PendingProposal(
+        trade_id=t_prop.trade_id,
+        thesis_id=t_prop.thesis_id,
+        symbol="PLTR",
+        action=Action.BUY,
+        quantity=10.0,
+        reference_price=186.24,
+        stop_loss=170.0,
+        snapshot_timestamp=sample_snapshot.timestamp,
+        risk_decision=RiskStatus.APPROVED,
+        risk_reasons=["Risk within limits."],
+        proposal_snapshot=t_prop,
+    )
+
+    auditor = EvidenceAuditor()
+    report = auditor.audit(pending, snapshot=sample_snapshot, portfolio=sample_portfolio)
+
+    assert report.symbol == "PLTR"
+    assert report.proposal_action == Action.BUY
+    assert report.overall_status == AuditStatus.PASSED
+    assert report.supported_count >= 2
+    assert report.unsupported_count == 0
+
+
+def test_precedence_missing_evidence_over_mismatch(sample_portfolio, supported_proposal):
+    """MISSING_EVIDENCE takes precedence over symbol or timestamp mismatch when snapshot is None."""
+    auditor = EvidenceAuditor()
+    report = auditor.audit(
+        supported_proposal,
+        snapshot=None,
+        portfolio=sample_portfolio,
+        symbol="MSFT",  # mismatch with proposal symbol PLTR
+    )
+    assert report.overall_status == AuditStatus.MISSING_EVIDENCE
+
+
+def test_precedence_stale_or_mismatch_over_failed(sample_snapshot, sample_portfolio):
+    """STALE_OR_MISMATCHED takes precedence over unsupported factual claims."""
+    proposal = StrategyProposal(
+        action=Action.BUY,
+        confidence=0.8,
+        thesis="Wrong price claim.",
+        evidence="Price: 999.99",  # Contradicts snapshot current_price 186.24
+        assumptions=[],
+        invalidation_conditions=[],
+        suggested_stop_loss=170.0,
+        reasoning_summary="Mismatch test.",
+    )
+    auditor = EvidenceAuditor()
+    # Mismatched symbol (AAPL vs PLTR snapshot)
+    report = auditor.audit(proposal, snapshot=sample_snapshot, portfolio=sample_portfolio, symbol="AAPL")
+    assert report.overall_status == AuditStatus.STALE_OR_MISMATCHED
+
+
+def test_precedence_failed_over_inconclusive(sample_snapshot, sample_portfolio):
+    """FAILED takes precedence over INCONCLUSIVE when an unsupported claim coexists with evidence gaps."""
+    proposal = StrategyProposal(
+        action=Action.BUY,
+        confidence=0.8,
+        thesis="Contradicted price with absent indicator.",
+        evidence="Price: 999.99, RSI: 65",  # Price contradicts snapshot, RSI is absent indicator
+        assumptions=[],
+        invalidation_conditions=[],
+        suggested_stop_loss=170.0,
+        reasoning_summary="Precedence test.",
+    )
+    auditor = EvidenceAuditor()
+    report = auditor.audit(proposal, snapshot=sample_snapshot, portfolio=sample_portfolio, symbol="PLTR")
+    # Unsupported claim must produce FAILED, not INCONCLUSIVE
+    assert report.overall_status == AuditStatus.FAILED
+    assert report.unsupported_count >= 1
+    assert any("RSI" in c.claim for c in report.claims if c.status == ClaimStatus.UNVERIFIABLE)
+
+
+def test_precedence_inconclusive_over_passed(sample_snapshot, sample_portfolio):
+    """INCONCLUSIVE takes precedence over PASSED when a factual evidence gap exists."""
+    proposal = StrategyProposal(
+        action=Action.BUY,
+        confidence=0.8,
+        thesis="Valid price with absent indicator.",
+        evidence="Price: 186.24, RSI: 65",  # Price matches snapshot, RSI is absent
+        assumptions=[],
+        invalidation_conditions=[],
+        suggested_stop_loss=170.0,
+        reasoning_summary="Gap test.",
+    )
+    auditor = EvidenceAuditor()
+    report = auditor.audit(proposal, snapshot=sample_snapshot, portfolio=sample_portfolio, symbol="PLTR")
+    # Missing indicator is a factual evidence gap -> INCONCLUSIVE
+    assert report.overall_status == AuditStatus.INCONCLUSIVE
+    assert report.supported_count >= 1
+    assert report.unsupported_count == 0
+
+
+def test_passed_with_qualitative_assumptions(sample_snapshot, sample_portfolio):
+    """Qualitative assumptions do not degrade an otherwise supported audit to INCONCLUSIVE."""
+    proposal = StrategyProposal(
+        action=Action.BUY,
+        confidence=0.8,
+        thesis="Valid price setup.",
+        evidence="Price: 186.24, SMA20: 171.03",
+        assumptions=[
+            "Market liquidity will remain strong.",
+            "Sector rotation favors tech equities.",
+        ],
+        invalidation_conditions=["Unforeseen macro shocks."],
+        suggested_stop_loss=170.0,
+        reasoning_summary="Assumptions test.",
+    )
+    auditor = EvidenceAuditor()
+    report = auditor.audit(proposal, snapshot=sample_snapshot, portfolio=sample_portfolio, symbol="PLTR")
+    assert report.overall_status == AuditStatus.PASSED
+    assert report.supported_count >= 2
+    assert report.unsupported_count == 0
+    assert report.unverifiable_count >= 3
+
