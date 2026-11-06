@@ -12,6 +12,13 @@ from tradepilot.core.config import settings
 
 client = TestClient(app)
 
+@pytest.fixture(autouse=True)
+def isolate_database(tmp_path):
+    """Isolate DB_PATH so tests never write to production/local database."""
+    test_db = str(tmp_path / "test_api_risk.db")
+    with patch("tradepilot.api.DB_PATH", test_db):
+        yield
+
 @pytest.fixture
 def mock_snapshot():
     return MarketSnapshot(

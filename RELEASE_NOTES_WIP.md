@@ -43,3 +43,29 @@
 
 ## 3. Phase Log & Running Decisions
 *(Will be appended after each phase)*
+
+## 4. Phase A: Baseline Inspection Findings
+- **Baseline Test Run Results:**
+  - Total Collected: 323 tests
+  - Passed: 317 tests
+  - Failed: 6 tests (all 6 in `tests/test_evidence_auditor.py`)
+  - Skipped: 0
+  - Warnings: 2 warnings (`fastapi.testclient` deprecation for `httpx2`, and `websockets.legacy` deprecation warning)
+  - Time: 10.72s
+- **Baseline Failure Analysis:**
+  - `tests/test_evidence_auditor.py::test_audit_all_supported_claims`
+  - `tests/test_evidence_auditor.py::test_audit_absent_portfolio_not_treated_as_false`
+  - `tests/test_evidence_auditor.py::test_audit_no_trade_proposal_without_inventing_evidence`
+  - `tests/test_evidence_auditor.py::test_journal_isolation`
+  - `tests/test_evidence_auditor.py::test_api_audit_endpoint`
+  - `tests/test_evidence_auditor.py::test_api_trace_includes_evidence_audit`
+  All failed with `AssertionError: assert 'INCONCLUSIVE' == 'PASSED'`.
+- **Database Write Incident & Fix:**
+  - During the baseline run, `tests/test_api_risk.py` executed `POST /api/risk/{symbol}` without patching `tradepilot.api.DB_PATH`.
+  - This resulted in 3 rows added to `pending_proposals` and 3 rows added to `evidence_audits` in `data/tradepilot.db`.
+  - Checksum changed from `82AC2851E605B928663C971123A2AE622F9B8CB8042CC7CEA1F89D153375EE32` to `45F09E205997B3215A1FCBFD4ADF156E7BF1D2CA1A076CA40D334F2C3677950B`.
+  - Both copies were immediately preserved:
+    - Pre-run backup: `C:\Users\atuly\.gemini\antigravity\brain\bd783083-08d3-4de9-8cd8-711fb5411e0d\db_backup\tradepilot.db`
+    - Post-baseline copy: `C:\Users\atuly\.gemini\antigravity\brain\bd783083-08d3-4de9-8cd8-711fb5411e0d\db_backup\tradepilot_post_baseline.db`
+  - Per instructions ("treat that as a defect and fix it by isolating the test, not by restoring the file afterward"), an `autouse=True` fixture was added to `tests/test_api_risk.py` redirecting `tradepilot.api.DB_PATH` to `tmp_path / "test_api_risk.db"`.
+  - Re-run of `tests/test_api_risk.py` confirmed 13 passed in 1.57s with identical checksum before and after (`45F09E205997B3215A1FCBFD4ADF156E7BF1D2CA1A076CA40D334F2C3677950B`).
