@@ -1,5 +1,32 @@
-from tradepilot.core.models import TradeProposal, RiskStatus, ExecutionResult, ExecutionStatus, PortfolioState, ApprovedTrade
+"""
+tradepilot/core/orchestrator.py
+
+LEGACY / PROTOTYPE MODULE:
+This module represents the initial Step 1 prototype orchestrator used early in development
+to demonstrate the 3-stage loop: Strategy Proposal -> RiskEngine -> Execution.
+
+In the current v1.0 architecture:
+  - Proposal creation is driven by StrategyAgent / LLMStrategyAgent.
+  - RiskEngine evaluates proposals and records them in PendingProposals.
+  - Human approval is mandatory (Step 4 / Phase D) via CLI or Web Dashboard.
+  - Paper execution is performed by AlpacaClient (Step 5).
+  - Web backend is served by tradepilot.api (FastAPI).
+
+This module is preserved for backward compatibility, reference, and standalone testing.
+"""
+
+import uuid
+from tradepilot.core.models import (
+    Action,
+    ApprovedTrade,
+    ExecutionResult,
+    ExecutionStatus,
+    PortfolioState,
+    RiskStatus,
+    TradeProposal,
+)
 from tradepilot.core.risk_engine import RiskEngine
+
 
 class Orchestrator:
     def __init__(self, risk_engine: RiskEngine):
@@ -24,11 +51,16 @@ class Orchestrator:
             print("Execution Agent: Order aborted due to risk rejection.")
             return ExecutionResult(
                 trade_id=mocked_proposal.trade_id,
+                thesis_id=mocked_proposal.thesis_id,
+                client_order_id=mocked_proposal.trade_id,
+                alpaca_order_id=None,
                 status=ExecutionStatus.REJECTED,
                 symbol=mocked_proposal.symbol,
                 action=mocked_proposal.action,
-                filled_quantity=0,
-                filled_price=None,
+                quantity=mocked_proposal.quantity,
+                order_type=mocked_proposal.order_type,
+                filled_quantity=0.0,
+                average_fill_price=None,
                 message="Aborted by risk engine."
             )
             
@@ -43,10 +75,15 @@ class Orchestrator:
         # Simulate execution success
         return ExecutionResult(
             trade_id=approved_trade.trade_id,
+            thesis_id=proposal.thesis_id,
+            client_order_id=approved_trade.trade_id,
+            alpaca_order_id=f"mock-alpaca-{uuid.uuid4().hex[:8]}",
             status=ExecutionStatus.FILLED,
             symbol=proposal.symbol,
             action=proposal.action,
+            quantity=proposal.quantity,
+            order_type=proposal.order_type,
             filled_quantity=proposal.quantity,
-            filled_price=proposal.current_price,
-            message="Order filled successfully."
+            average_fill_price=proposal.current_price,
+            message="Order filled successfully (simulated legacy execution)."
         )

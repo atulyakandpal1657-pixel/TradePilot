@@ -1,3 +1,15 @@
+"""
+main.py
+
+LEGACY CLI DEMONSTRATION RUNNER:
+Initial Step 1 prototype demonstration script for the early Orchestrator loop.
+
+In production TradePilot v1.0, run the FastAPI application:
+    uv run uvicorn tradepilot.api:app --reload
+Or run CLI commands via:
+    uv run python -m tradepilot.cli --help
+"""
+
 from tradepilot.core.models import TradeProposal, Action, PortfolioState, OrderType
 from tradepilot.core.orchestrator import Orchestrator
 from tradepilot.core.risk_engine import RiskEngine

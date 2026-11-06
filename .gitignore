@@ -1,7 +1,14 @@
 .env
+.env.*
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
-data/
+data/*.db
+data/test_*.db
+data/demo_*.db
+data/tradepilot.db
 *.db
+*.db-journal
+*.sqlite
+*.sqlite3

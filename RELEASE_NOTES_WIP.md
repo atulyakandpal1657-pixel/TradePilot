@@ -108,3 +108,22 @@
 - **Test Results:** 33 passed, 0 failed in 2.16s.
 - **Database Checksum:** Verified unchanged (`45F09E205997B3215A1FCBFD4ADF156E7BF1D2CA1A076CA40D334F2C3677950B`).
 
+## 6. Phase C: Focused Cleanup & Repository Protection
+- **Audit of `tradepilot/core/orchestrator.py` and `main.py`:**
+  - Evaluated code references: Neither is imported by the active FastAPI application (`tradepilot/api.py`), CLI (`tradepilot/cli.py`), or test suite (`tests/`).
+  - Both represented early Step 1 prototype implementations of a synchronous loop without human-in-the-loop approval, database persistence, evidence audits, or decision traces.
+  - Per the prompt retention rule ("Do not delete anything unless you have proved it is completely unreferenced across the codebase, tests and documentation"), `orchestrator.py` is referenced in `README.md`'s architectural tree.
+  - Action taken:
+    - Retained both files and documented them with comprehensive module docstrings marking them as legacy prototype demonstration components.
+    - Fixed `ExecutionResult` field instantiation in `Orchestrator` (`thesis_id`, `client_order_id`, `quantity`, `order_type`, `average_fill_price`) so that running `uv run python main.py` executes successfully without Pydantic validation errors.
+- **`.gitignore` Hardening & Test DB Isolation:**
+  - Expanded `.gitignore` to explicitly ignore `data/*.db`, `data/test_*.db`, `data/demo_*.db`, `data/tradepilot.db`, `*.db-journal`, and SQLite temp files.
+  - Running test suites and demo scripts will never dirty Git working tree status.
+- **`data/tradepilot.db` Git Tracking Decision:**
+  - Prior to Phase C, `data/tradepilot.db` was tracked in Git history, causing local paper trading state changes to show up in `git status`.
+  - Decision: Stop tracking `data/tradepilot.db` in Git (`git rm --cached data/tradepilot.db`) while strictly preserving the working tree file on disk.
+  - Verified SHA-256 checksum before untracking: `45F09E205997B3215A1FCBFD4ADF156E7BF1D2CA1A076CA40D334F2C3677950B`.
+  - Verified SHA-256 checksum after untracking: `45F09E205997B3215A1FCBFD4ADF156E7BF1D2CA1A076CA40D334F2C3677950B`.
+  - Result: Local user data is preserved untouched on disk, but never committed to version control.
+
+
