@@ -12,3 +12,5 @@ data/tradepilot.db
 *.db-journal
 *.sqlite
 *.sqlite3
+FINAL_RELEASE_REPORT.md
+PROJECT_TECHNICAL_AUDIT.md
