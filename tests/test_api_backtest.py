@@ -190,7 +190,7 @@ def test_invalid_initial_capital():
     })
     assert response.status_code == 422
 
-@patch("tradepilot.backtest.data.fetch_historical_bars")
+@patch("tradepilot.api.fetch_historical_bars")
 @patch("tradepilot.alpaca.execution.AlpacaPaperExecutor.execute")
 @patch("tradepilot.agents.llm_strategy.LLMStrategyAgent.analyze_market")
 def test_no_side_effects(mock_analyze, mock_execute, mock_fetch):
