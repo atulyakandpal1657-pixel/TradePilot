@@ -1,14 +1,25 @@
+function fmtCurrency(val) {
+    if (val == null || isNaN(val)) return '—';
+    return '$' + Number(val).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
 async function loadDashboard(tradeId) {
     try {
         const response = await fetch(`/api/trace/${tradeId}`);
         if (!response.ok) {
-            throw new Error('Trace data not found');
+            throw new Error(`Trace data not found (HTTP ${response.status})`);
         }
         const data = await response.json();
         render(data);
     } catch (e) {
-        console.error(e);
-        document.body.innerHTML = `<h2 style="color:red; text-align:center;">Error loading TradePilot data: ${e.message}</h2>`;
+        console.error('Failed to load decision trace:', e);
+        const traceEl = document.getElementById('decision-trace');
+        if (traceEl) {
+            traceEl.innerHTML = `<p class="empty-state-text text-danger">Error loading trace data: ${e.message}</p>`;
+        }
     }
 }
 
@@ -242,10 +253,22 @@ async function loadAccountSnapshot() {
         const data = await res.json();
         
         const html = `
-            <div class="metric"><span class="metric-label">Account Equity:</span><span class="metric-value">$${data.account_equity.toFixed(2)}</span></div>
-            <div class="metric"><span class="metric-label">Buying Power:</span><span class="metric-value">$${data.buying_power.toFixed(2)}</span></div>
-            <div class="metric"><span class="metric-label">Cash:</span><span class="metric-value">$${data.cash.toFixed(2)}</span></div>
-            <div class="metric"><span class="metric-label">Open Positions:</span><span class="metric-value">${data.number_of_open_positions}</span></div>
+            <div class="account-metric-card">
+                <span class="metric-label">Account Equity:</span>
+                <span class="metric-value">${fmtCurrency(data.account_equity)}</span>
+            </div>
+            <div class="account-metric-card">
+                <span class="metric-label">Buying Power:</span>
+                <span class="metric-value">${fmtCurrency(data.buying_power)}</span>
+            </div>
+            <div class="account-metric-card">
+                <span class="metric-label">Cash:</span>
+                <span class="metric-value">${fmtCurrency(data.cash)}</span>
+            </div>
+            <div class="account-metric-card">
+                <span class="metric-label">Open Positions:</span>
+                <span class="metric-value">${Number(data.number_of_open_positions).toLocaleString('en-US')}</span>
+            </div>
         `;
         document.getElementById('account-snapshot-content').innerHTML = html;
     } catch (e) {
@@ -256,29 +279,43 @@ async function loadAccountSnapshot() {
 async function loadTradeJournal() {
     try {
         const res = await fetch('/api/trades');
-        if (!res.ok) return;
-        const data = await res.json();
         const tbody = document.getElementById('trade-journal-body');
+        if (!tbody) return;
+
+        if (!res.ok) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--danger); padding: 24px;">Failed to load trade journal (HTTP ${res.status}).</td></tr>`;
+            return;
+        }
+        const data = await res.json();
         
+        if (!data.trades || data.trades.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-secondary); padding: 24px;">No trade records found in journal. Approved trades and executions will appear here.</td></tr>`;
+            return;
+        }
+
         let html = '';
         data.trades.forEach(t => {
             const dateStr = t.created_at ? new Date(t.created_at).toLocaleString() : '—';
             const actionClass = t.action === 'BUY' ? 'text-success' : 'text-danger';
             
             // Format fill price correctly if it's not a number it shouldn't crash
-            const fillPrice = t.average_fill_price ? `$${t.average_fill_price.toFixed(2)}` : '—';
+            const fillPrice = (t.average_fill_price != null && !isNaN(t.average_fill_price))
+                ? fmtCurrency(t.average_fill_price)
+                : '—';
             const execStatus = t.execution_status || '—';
+            const formattedQty = (t.quantity != null && !isNaN(t.quantity)) ? Number(t.quantity).toLocaleString('en-US') : t.quantity;
+            const formattedFilledQty = (t.filled_quantity != null && !isNaN(t.filled_quantity)) ? Number(t.filled_quantity).toLocaleString('en-US') : (t.filled_quantity ?? 0);
             
             html += `
                 <tr onclick="showTradeDetails('${t.trade_id}')">
                     <td>${dateStr}</td>
                     <td><strong>${t.symbol}</strong></td>
                     <td class="${actionClass}">${t.action}</td>
-                    <td>${t.quantity}</td>
+                    <td>${formattedQty}</td>
                     <td>${t.order_type}</td>
                     <td><span class="badge neutral">${t.lifecycle_status}</span></td>
                     <td><span class="badge ${execStatus === 'FILLED' ? 'success' : (execStatus === 'REJECTED' ? 'danger' : 'warning')}">${execStatus}</span></td>
-                    <td>${t.filled_quantity}</td>
+                    <td>${formattedFilledQty}</td>
                     <td>${fillPrice}</td>
                 </tr>
             `;
@@ -287,6 +324,10 @@ async function loadTradeJournal() {
         tbody.innerHTML = html;
     } catch (e) {
         console.error('Failed to load trades', e);
+        const tbody = document.getElementById('trade-journal-body');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--danger); padding: 24px;">Error loading trade journal: ${e.message}</td></tr>`;
+        }
     }
 }
 
@@ -654,7 +695,7 @@ const MW = (() => {
                 <div class="ticker-indicators">
                   <span>SMA20 &nbsp;${fmtPrice(snap.sma_20)}</span>
                   <span>SMA50 &nbsp;${fmtPrice(snap.sma_50)}</span>
-                  <span>Vol &nbsp;&nbsp;&nbsp;${Number(snap.volatility).toFixed(4)}</span>
+                  <span>20d Vol &nbsp;${(Number(snap.volatility) * 100).toFixed(2)}%</span>
                 </div>
               </div>`;
         }).join('');
@@ -966,7 +1007,7 @@ const MW = (() => {
                             <div class="metric"><span class="metric-label">Daily Change</span><span class="metric-value ticker-change ${changeClass(ai.market_snapshot.price_change_pct)}">${fmtPct(ai.market_snapshot.price_change_pct)}</span></div>
                             <div class="metric"><span class="metric-label">SMA20</span><span class="metric-value">${fmtPrice(ai.market_snapshot.sma_20)}</span></div>
                             <div class="metric"><span class="metric-label">SMA50</span><span class="metric-value">${fmtPrice(ai.market_snapshot.sma_50)}</span></div>
-                            <div class="metric"><span class="metric-label">Volatility</span><span class="metric-value">${Number(ai.market_snapshot.volatility).toFixed(4)}</span></div>
+                            <div class="metric"><span class="metric-label">20-day Volatility</span><span class="metric-value">${(Number(ai.market_snapshot.volatility) * 100).toFixed(2)}%</span></div>
                             <div class="metric"><span class="metric-label">Volume</span><span class="metric-value">${fmtVol(ai.market_snapshot.volume)}</span></div>
                             <div class="metric" style="grid-column:1/-1; margin-top:6px;">
                                 <span class="metric-label">Data timestamp</span>
@@ -1026,8 +1067,8 @@ const MW = (() => {
               <span class="metric-value">${fmtPrice(snap.sma_50)}</span>
             </div>
             <div class="metric">
-              <span class="metric-label">Volatility</span>
-              <span class="metric-value">${Number(snap.volatility).toFixed(4)}</span>
+              <span class="metric-label">20-day Volatility</span>
+              <span class="metric-value">${(Number(snap.volatility) * 100).toFixed(2)}%</span>
             </div>
             <div class="metric">
               <span class="metric-label">Volume</span>

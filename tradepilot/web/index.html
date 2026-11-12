@@ -42,7 +42,7 @@
             <div class="market-watch-header">
                 <h2>ACCOUNT SNAPSHOT</h2>
             </div>
-            <div id="account-snapshot-content" style="display:flex; gap:20px; flex-wrap:wrap; margin-top: 10px;">
+            <div id="account-snapshot-content" class="account-snapshot-grid">
                 <!-- Populated by JS -->
             </div>
         </section>
@@ -144,7 +144,7 @@
             <section class="card">
                 <h2>1. MARKET SNAPSHOT</h2>
                 <div class="metrics-grid" id="market-snapshot">
-                    <!-- Populated by JS -->
+                    <p class="empty-state-text">No active market snapshot. Select a ticker in Market Watch above to analyze, or click a trade in the Trade Journal below.</p>
                 </div>
             </section>
 
@@ -152,7 +152,7 @@
             <section class="card">
                 <h2>2. AI STRATEGY</h2>
                 <div class="ai-strategy" id="ai-strategy">
-                    <!-- Populated by JS -->
+                    <p class="empty-state-text">No active strategy proposal. Click &quot;Analyze&quot; on any selected ticker in Market Watch to generate a Gemini proposal.</p>
                 </div>
             </section>
 
@@ -160,7 +160,7 @@
             <section class="card">
                 <h2>3. RISK ENGINE</h2>
                 <div class="risk-engine" id="risk-engine">
-                    <!-- Populated by JS -->
+                    <p class="empty-state-text">Risk checks not evaluated. Deterministic rules (position exposure, buying power, daily loss limit) validate proposals.</p>
                 </div>
             </section>
 
@@ -168,7 +168,7 @@
             <section class="card">
                 <h2>4. EXECUTION</h2>
                 <div class="execution" id="execution-section">
-                    <!-- Populated by JS -->
+                    <p class="empty-state-text">No pending execution. Human approval and Alpaca paper execution activate once a proposal passes risk evaluation.</p>
                 </div>
             </section>
         </div>
@@ -188,7 +188,7 @@
         <section class="card full-width">
             <h2>DECISION TRACE TIMELINE</h2>
             <div class="timeline" id="decision-trace">
-                <!-- Populated by JS -->
+                <p class="empty-state-text">Select a trade from the Trade Journal below to view its complete 20-section decision trace timeline.</p>
             </div>
         </section>
 
@@ -196,11 +196,11 @@
         <section class="card full-width">
             <h2>LEARNING LOOP</h2>
             <div class="learning-loop" id="learning-loop">
-                <!-- Populated by JS -->
+                <p class="empty-state-text">Position forensics and causal lessons appear here once an executed paper trade is closed.</p>
             </div>
         </section>
     </main>
 
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
 </body>
 </html>
